@@ -1,0 +1,112 @@
+dist: trusty
+language: cpp
+sudo: required
+
+addons:
+  apt:
+    sources:
+    - ubuntu-toolchain-r-test
+    - llvm-toolchain-precise
+    packages:
+    - g++-4.8
+    - clang-3.8
+
+matrix:
+  include:
+  - compiler: gcc
+    env: CXX_COMPILER=g++-4.8 C_COMPILER=gcc-4.8 TOOLSET=gcc CUDA_VERSION_MAJOR="7" CUDA_VERSION_MINOR="0" CUDA_PKG_LONGVERSION="${CUDA_VERSION_MAJOR}.${CUDA_VERSION_MINOR}-28" CUDA_PKG_VERSION="${CUDA_VERSION_MAJOR}-${CUDA_VERSION_MINOR}"
+  - compiler: gcc
+    env: CXX_COMPILER=g++-4.8 C_COMPILER=gcc-4.8 TOOLSET=gcc CUDA_VERSION_MAJOR="7" CUDA_VERSION_MINOR="5" CUDA_PKG_LONGVERSION="${CUDA_VERSION_MAJOR}.${CUDA_VERSION_MINOR}-18" CUDA_PKG_VERSION="${CUDA_VERSION_MAJOR}-${CUDA_VERSION_MINOR}"
+  - compiler: gcc
+    env: CXX_COMPILER=g++-4.8 C_COMPILER=gcc-4.8 TOOLSET=gcc  CUDA_VERSION_MAJOR="8" CUDA_VERSION_MINOR="0" CUDA_PKG_LONGVERSION="${CUDA_VERSION_MAJOR}.${CUDA_VERSION_MINOR}.61-1" CUDA_PKG_VERSION="${CUDA_VERSION_MAJOR}-${CUDA_VERSION_MINOR}"
+  - compiler: clang
+    # clang 3.8 is  supported in cuda >= 8.0
+    env: CXX_COMPILER=clang++-3.8 C_COMPILER=clang-3.8 TOOLSET=clang CUDA_VERSION_MAJOR="8" CUDA_VERSION_MINOR="0" CUDA_PKG_LONGVERSION="${CUDA_VERSION_MAJOR}.${CUDA_VERSION_MINOR}.61-1" CUDA_PKG_VERSION="${CUDA_VERSION_MAJOR}-${CUDA_VERSION_MINOR}"
+
+
+env:
+  global:
+  - NUM_CPU="`grep processor /proc/cpuinfo | wc -l`"; echo $NUM_CPU
+  - BUILD_TYPE="RELEASE"
+  - BUILD_SYSTEM="`uname -s`"
+  - BUILD_PROCESSOR="`uname -p`"
+  - BATCHEDSOLVER_SOURCE=${TRAVIS_BUILD_DIR}
+  - BATCHEDSOLVER_BUILD=${TRAVIS_BUILD_DIR}/build
+  - BATCHEDSOLVER_INSTALL=${BATCHEDSOLVER_BUILD}/install
+  - BATCHEDSOLVER_BUILD_VARIANT=${TRAVIS_BUILD_DIR}/build
+  - BATCHEDSOLVER_INSTALL_VARIANT=${BATCHEDSOLVER_BUILD_VARIANT}/install
+  # CMAKE
+  - CMAKE_URL="https://cmake.org/files/v3.8/cmake-3.8.2-Linux-x86_64.tar.gz"
+  - CMAKE_ROOT=${HOME}/cmake
+  - CMAKE_SOURCE=${CMAKE_ROOT}/source
+  - CMAKE_INSTALL=${CMAKE_ROOT}/install
+
+before_install:
+# CMAKE most recent version
+- >
+  if [ "$(ls -A ${CMAKE_INSTALL})" ]; then
+    echo "CMake found in cache.";
+    ls -A ${CMAKE_INSTALL}
+    export PATH=${CMAKE_INSTALL}/bin:${PATH};
+    cmake --version
+  else
+    mkdir --parent ${CMAKE_SOURCE}
+    mkdir --parent ${CMAKE_INSTALL}
+    ls -A ${CMAKE_INSTALL}
+    travis_retry wget --no-check-certificate --quiet -O - ${CMAKE_URL} | tar --strip-components=1 -xz -C ${CMAKE_INSTALL}
+    export PATH=${CMAKE_INSTALL}/bin:${PATH};
+    cmake --version
+  fi
+
+install:
+# CUDA (only if needed)
+- CUDA_REPO_PKG=cuda-repo-ubuntu1404_${CUDA_PKG_LONGVERSION}_amd64.deb
+- wget http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1404/x86_64/$CUDA_REPO_PKG
+- sudo dpkg -i $CUDA_REPO_PKG
+- rm $CUDA_REPO_PKG
+- sudo apt-get -y update
+- sudo apt-get install -y --no-install-recommends  cuda-core-$CUDA_PKG_VERSION  cuda-cudart-dev-$CUDA_PKG_VERSION  cuda-cublas-dev-$CUDA_PKG_VERSION cuda-curand-dev-$CUDA_PKG_VERSION
+- sudo ln -s /usr/local/cuda-${CUDA_VERSION_MAJOR}.${CUDA_VERSION_MINOR} /usr/local/cuda
+
+
+before_script:
+# Create build folder
+- mkdir --parent $BATCHEDSOLVER_BUILD
+- cd $BATCHEDSOLVER_BUILD
+# Classic release build
+- >
+  cmake \
+    -DCMAKE_CXX_COMPILER=$CXX_COMPILER \
+    -DCMAKE_C_COMPILER=$C_COMPILER \
+    -DCMAKE_INSTALL_PREFIX:PATH=$BATCHEDSOLVER_INSTALL \
+    -DCMAKE_BUILD_TYPE:BOOL=$BUILD_TYPE \
+    . $BATCHEDSOLVER_SOURCE
+
+script:
+# classic make install
+- make install -j 2 VERBOSE=1
+
+
+## Test if it compiles as third party
+#- cd $BATCHEDSOLVER_SOURCE_APP
+#- mkdir --parent $BATCHEDSOLVER_BUILD_APP
+#- cd $BATCHEDSOLVER_BUILD_APP
+#- >
+#  cmake -DCMAKE_CXX_COMPILER=$CXX_COMPILER \
+#    -DCMAKE_C_COMPILER=$C_COMPILER \
+#    -DCCTag_DIR:PATH=/$BATCHEDSOLVER_INSTALL/lib/cmake/CCTag/ \
+#    -DOpenCV_DIR:PATH=$OPENCV_INSTALL/share/OpenCV \
+#    -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install \
+#    . $BATCHEDSOLVER_SOURCE_APP
+#- make install -j 2 VERBOSE=1
+
+
+# Before uploading the new cache archive
+before_cache:
+- ccache -s
+
+cache:
+  ccache: true
+
+  directories:
+  - $CMAKE_INSTALL

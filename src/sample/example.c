@@ -2,8 +2,6 @@
 #include <stdlib.h>
 #include "cuda_runtime.h"
 #include "cuComplex.h"
-#include "inverse.h"
-#include "solve.h"
 
 // Macro to catch CUDA errors in CUDA runtime calls
 #define CUDA_SAFE_CALL(call)                                          \

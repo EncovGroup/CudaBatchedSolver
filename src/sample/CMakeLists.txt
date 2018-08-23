@@ -1,0 +1,2 @@
+CUDA_ADD_EXECUTABLE(example_batch_solver example.c)
+target_link_libraries(example_batch_solver CudaBatchedSolver)

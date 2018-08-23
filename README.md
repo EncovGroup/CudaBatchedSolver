@@ -106,3 +106,15 @@ A(2) =    0  +1i     2  +1i    -4  +0i      b(2) =   -8  +3i      x(2) =    2  +
           2  -3i     1  +0i     3  +0i               13  -3i                3  -0i
 
 ```
+
+
+## Building
+
+See [INSTALL](INSTALL.md) text file.
+
+Continuous integration:
+- [![Build Status](https://travis-ci.org/EncovGroup/CudaBatchedSolver.svg?branch=develop)](https://travis-ci.org/EncovGroup/CudaBatchedSolver) develop branch
+ 
+ 
+## License
+[BSD 3-Clause License](LICENSE.md), 2011-2013, NVIDIA Corporation

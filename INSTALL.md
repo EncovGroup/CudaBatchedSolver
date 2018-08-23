@@ -1,8 +1,5 @@
 # CUDA Batch Solver
 
-Continuous integration: 
-- [![Build Status](https://travis-ci.org/EncovGroup/CudaBatchedSolver.svg?branch=develop)](https://travis-ci.org/EncovGroup/CudaBatchedSolver) develop branch
-
 ## Building instructions
 
 Required tools:

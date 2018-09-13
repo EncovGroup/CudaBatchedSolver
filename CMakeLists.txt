@@ -4,27 +4,76 @@ project(CudaBatchedSolver LANGUAGES C CXX VERSION 1.0)
 
 option(CudaBatchedSolver_BUILD_SAMPLES "Build the samples" ON)
 option(CudaBatchedSolver_EXPORT_PACKAGE "Export the library as cmake package" OFF)
+option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
+set(CudaBatchedSolver_CUDA_ARCH "Auto" CACHE STRING "Selects GPU arch flags for nvcc based on target_CUDA_architectures
+        ['Auto'|'Common'|'All'|'Fermi Kepler Maxwell Kepler+Tegra Kepler+Tesla Maxwell+Tegra Pascal'|'2.0 2.1 3.0 etc']")
+
+
+# There was a bug in FindCUDA fixed in cmake 3.10 that creates empty strings on the nvcc command line.
+# The solution merged in cmake 3.10 use the command COMMAND_EXPAND_LISTS only available from cmake >= 3.8
+# https://gitlab.kitware.com/cmake/cmake/merge_requests/1008
+# So we use another solution compatible with cmake >= 3.4 proposed here:
+# https://gitlab.kitware.com/cmake/cmake/issues/16411
+# if cmake version < 3.10 use our hacked version of FindCUDA:
+if(${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION} VERSION_LESS 3.10)
+    set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake/compatibilityCUDA)
+endif()
+
+if(BUILD_SHARED_LIBS)
+    message(STATUS "BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS}")
+    # Need to declare CUDA_USE_STATIC_CUDA_RUNTIME as an option to ensure that it is not overwritten in FindCUDA.
+    option(CUDA_USE_STATIC_CUDA_RUNTIME "Use the static version of the CUDA runtime library if available" OFF)
+    set(CUDA_USE_STATIC_CUDA_RUNTIME OFF)
+    # Workaround to force deactivation of cuda static runtime for cmake < 3.10
+    set(CUDA_cudart_static_LIBRARY 0)
+    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+else()
+    message(STATUS "BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS}")
+    option(CUDA_USE_STATIC_CUDA_RUNTIME "Use the static version of the CUDA runtime library if available" ON)
+    set(CUDA_USE_STATIC_CUDA_RUNTIME ON)
+    set(CMAKE_POSITION_INDEPENDENT_CODE OFF)
+endif()
 
 find_package(CUDA 7.0 REQUIRED)
 
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER "4.9.3")
+        if(CUDA_VERSION VERSION_LESS "8.0")
+            MESSAGE(STATUS "Found gcc >=5 and CUDA <= 7.5, adding workaround C++ flags")
+            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_FORCE_INLINES -D_MWAITXINTRIN_H_INCLUDED -D__STRICT_ANSI__")
+        endif(CUDA_VERSION VERSION_LESS "8.0")
+    endif(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER "4.9.3")
+endif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+
 set(CUDA_SEPARABLE_COMPILATION ON)
 
-set(CUDA_NVCC_FLAGS         "${CUDA_NVCC_FLAGS};-gencode;arch=compute_30,code=sm_30")
-set(CUDA_NVCC_FLAGS         "${CUDA_NVCC_FLAGS};-gencode;arch=compute_35,code=sm_35")
-set(CUDA_NVCC_FLAGS         "${CUDA_NVCC_FLAGS};-gencode;arch=compute_50,code=sm_50")
-set(CUDA_NVCC_FLAGS         "${CUDA_NVCC_FLAGS};-gencode;arch=compute_52,code=sm_52")
-set(CUDA_NVCC_FLAGS         "${CUDA_NVCC_FLAGS};-gencode=arch=compute_52,code=compute_52")
+set(CUDA_NVCC_FLAGS_DEBUG   "${CUDA_NVCC_FLAGS_DEBUG};-G")
 
-if(NOT CUDA_VERSION VERSION_LESS 8.0) # cuda >= 8.0
-    set(CUDA_NVCC_FLAGS         "${CUDA_NVCC_FLAGS};-gencode=arch=compute_60,code=sm_60")
-    set(CUDA_NVCC_FLAGS         "${CUDA_NVCC_FLAGS};-gencode=arch=compute_61,code=sm_61")
-    set(CUDA_NVCC_FLAGS         "${CUDA_NVCC_FLAGS};-gencode=arch=compute_62,code=sm_62")
+if(BUILD_SHARED_LIBS)
+    # this goes here because findCuda reset the flags
+    set(CUDA_NVCC_FLAGS         "${CUDA_NVCC_FLAGS};-Xcompiler;-fPIC;")
 endif()
+
+message(STATUS "CudaBatchedSolver_CUDA_ARCH ${CudaBatchedSolver_CUDA_ARCH}")
+CUDA_SELECT_NVCC_ARCH_FLAGS(CudaBatchedSolver_ARCH_FLAGS ${CudaBatchedSolver_CUDA_ARCH})
+list(APPEND CUDA_NVCC_FLAGS ${CudaBatchedSolver_ARCH_FLAGS})
+message(STATUS "Building for the following architctures: ${CudaBatchedSolver_ARCH_FLAGS}")
+
 
 if(NOT CUDA_VERSION VERSION_LESS 7.0) # cuda >= 7.0
     set(CUDA_NVCC_FLAGS         "${CUDA_NVCC_FLAGS};-std=c++11;")
 endif()
 
+if(NOT CUDA_VERSION VERSION_LESS 7.5) # cuda >= 7.5
+    if(UNIX)
+        set(CUDA_NVCC_FLAGS         "${CUDA_NVCC_FLAGS};-D_FORCE_INLINES")
+    endif()
+    set(CUDA_NVCC_FLAGS         "${CUDA_NVCC_FLAGS};-Xptxas;--warn-on-local-memory-usage")
+    set(CUDA_NVCC_FLAGS         "${CUDA_NVCC_FLAGS};-Xptxas;--warn-on-spills")
+endif()
+
+# library required for CUDA dynamic parallelism, forgotten by CMake 3.4
+cuda_find_library_local_first(CUDA_CUDADEVRT_LIBRARY cudadevrt "\"cudadevrt\" library")
 
 # EXPORTING THE LIBRARY
 #
@@ -48,7 +97,6 @@ add_subdirectory(src/CudaBatchedSolver)
 if(CudaBatchedSolver_BUILD_SAMPLES)
     add_subdirectory(src/sample)
 endif()
-
 
 # Include module with fuction 'write_basic_package_version_file'
 include(CMakePackageConfigHelpers)
@@ -91,3 +139,18 @@ configure_file(
 
 add_custom_target(CudaBatchedSolver_uninstall
         COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake)
+
+
+
+# ==============================================================================
+# Print options
+# ==============================================================================
+message("\n")
+message("** CudaBatchedSolver version: " ${PROJECT_VERSION})
+message("** Building samples: " ${CudaBatchedSolver_BUILD_SAMPLES})
+message("** Building shared library: " ${BUILD_SHARED_LIBS})
+message("** Requested GPU architectures: " ${CudaBatchedSolver_CUDA_ARCH})
+message("** Building for the following architectures: " ${CudaBatchedSolver_ARCH_FLAGS})
+message("** Export package: " ${CudaBatchedSolver_EXPORT_PACKAGE})
+message("** Install path: ${CMAKE_INSTALL_PREFIX}")
+message("\n")

@@ -67,6 +67,16 @@ if(NOT CUDA_VERSION VERSION_LESS 7.0) # cuda >= 7.0
     set(CUDA_NVCC_FLAGS         "${CUDA_NVCC_FLAGS};-std=c++11;")
 endif()
 
+if(NOT CUDA_VERSION VERSION_LESS 7.5) # cuda >= 7.5
+    if(UNIX)
+        set(CUDA_NVCC_FLAGS         "${CUDA_NVCC_FLAGS};-D_FORCE_INLINES")
+    endif()
+    set(CUDA_NVCC_FLAGS         "${CUDA_NVCC_FLAGS};-Xptxas;--warn-on-local-memory-usage")
+    set(CUDA_NVCC_FLAGS         "${CUDA_NVCC_FLAGS};-Xptxas;--warn-on-spills")
+endif()
+
+# library required for CUDA dynamic parallelism, forgotten by CMake 3.4
+cuda_find_library_local_first(CUDA_CUDADEVRT_LIBRARY cudadevrt "\"cudadevrt\" library")
 
 # EXPORTING THE LIBRARY
 #

@@ -5,6 +5,9 @@ project(CudaBatchedSolver LANGUAGES C CXX VERSION 1.0)
 option(CudaBatchedSolver_BUILD_SAMPLES "Build the samples" ON)
 option(CudaBatchedSolver_EXPORT_PACKAGE "Export the library as cmake package" OFF)
 option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
+set(CudaBatchedSolver_CUDA_ARCH "Auto" CACHE STRING "Selects GPU arch flags for nvcc based on target_CUDA_architectures
+        ['Auto'|'Common'|'All'|'Fermi Kepler Maxwell Kepler+Tegra Kepler+Tesla Maxwell+Tegra Pascal'|'2.0 2.1 3.0 etc']")
+
 
 # There was a bug in FindCUDA fixed in cmake 3.10 that creates empty strings on the nvcc command line.
 # The solution merged in cmake 3.10 use the command COMMAND_EXPAND_LISTS only available from cmake >= 3.8
@@ -51,17 +54,11 @@ if(BUILD_SHARED_LIBS)
     set(CUDA_NVCC_FLAGS         "${CUDA_NVCC_FLAGS};-Xcompiler;-fPIC;")
 endif()
 
-set(CUDA_NVCC_FLAGS         "${CUDA_NVCC_FLAGS};-gencode;arch=compute_30,code=sm_30")
-set(CUDA_NVCC_FLAGS         "${CUDA_NVCC_FLAGS};-gencode;arch=compute_35,code=sm_35")
-set(CUDA_NVCC_FLAGS         "${CUDA_NVCC_FLAGS};-gencode;arch=compute_50,code=sm_50")
-set(CUDA_NVCC_FLAGS         "${CUDA_NVCC_FLAGS};-gencode;arch=compute_52,code=sm_52")
-set(CUDA_NVCC_FLAGS         "${CUDA_NVCC_FLAGS};-gencode=arch=compute_52,code=compute_52")
+message(STATUS "CudaBatchedSolver_CUDA_ARCH ${CudaBatchedSolver_CUDA_ARCH}")
+CUDA_SELECT_NVCC_ARCH_FLAGS(CudaBatchedSolver_ARCH_FLAGS ${CudaBatchedSolver_CUDA_ARCH})
+list(APPEND CUDA_NVCC_FLAGS ${CudaBatchedSolver_ARCH_FLAGS})
+message(STATUS "Building for the following architctures: ${CudaBatchedSolver_ARCH_FLAGS}")
 
-if(NOT CUDA_VERSION VERSION_LESS 8.0) # cuda >= 8.0
-    set(CUDA_NVCC_FLAGS         "${CUDA_NVCC_FLAGS};-gencode=arch=compute_60,code=sm_60")
-    set(CUDA_NVCC_FLAGS         "${CUDA_NVCC_FLAGS};-gencode=arch=compute_61,code=sm_61")
-    set(CUDA_NVCC_FLAGS         "${CUDA_NVCC_FLAGS};-gencode=arch=compute_62,code=sm_62")
-endif()
 
 if(NOT CUDA_VERSION VERSION_LESS 7.0) # cuda >= 7.0
     set(CUDA_NVCC_FLAGS         "${CUDA_NVCC_FLAGS};-std=c++11;")

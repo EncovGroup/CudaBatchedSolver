@@ -4,10 +4,52 @@ project(CudaBatchedSolver LANGUAGES C CXX VERSION 1.0)
 
 option(CudaBatchedSolver_BUILD_SAMPLES "Build the samples" ON)
 option(CudaBatchedSolver_EXPORT_PACKAGE "Export the library as cmake package" OFF)
+option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
+
+# There was a bug in FindCUDA fixed in cmake 3.10 that creates empty strings on the nvcc command line.
+# The solution merged in cmake 3.10 use the command COMMAND_EXPAND_LISTS only available from cmake >= 3.8
+# https://gitlab.kitware.com/cmake/cmake/merge_requests/1008
+# So we use another solution compatible with cmake >= 3.4 proposed here:
+# https://gitlab.kitware.com/cmake/cmake/issues/16411
+# if cmake version < 3.10 use our hacked version of FindCUDA:
+if(${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION} VERSION_LESS 3.10)
+    set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake/compatibilityCUDA)
+endif()
+
+if(BUILD_SHARED_LIBS)
+    message(STATUS "BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS}")
+    # Need to declare CUDA_USE_STATIC_CUDA_RUNTIME as an option to ensure that it is not overwritten in FindCUDA.
+    option(CUDA_USE_STATIC_CUDA_RUNTIME "Use the static version of the CUDA runtime library if available" OFF)
+    set(CUDA_USE_STATIC_CUDA_RUNTIME OFF)
+    # Workaround to force deactivation of cuda static runtime for cmake < 3.10
+    set(CUDA_cudart_static_LIBRARY 0)
+    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+else()
+    message(STATUS "BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS}")
+    option(CUDA_USE_STATIC_CUDA_RUNTIME "Use the static version of the CUDA runtime library if available" ON)
+    set(CUDA_USE_STATIC_CUDA_RUNTIME ON)
+    set(CMAKE_POSITION_INDEPENDENT_CODE OFF)
+endif()
 
 find_package(CUDA 7.0 REQUIRED)
 
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER "4.9.3")
+        if(CUDA_VERSION VERSION_LESS "8.0")
+            MESSAGE(STATUS "Found gcc >=5 and CUDA <= 7.5, adding workaround C++ flags")
+            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_FORCE_INLINES -D_MWAITXINTRIN_H_INCLUDED -D__STRICT_ANSI__")
+        endif(CUDA_VERSION VERSION_LESS "8.0")
+    endif(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER "4.9.3")
+endif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+
 set(CUDA_SEPARABLE_COMPILATION ON)
+
+set(CUDA_NVCC_FLAGS_DEBUG   "${CUDA_NVCC_FLAGS_DEBUG};-G")
+
+if(BUILD_SHARED_LIBS)
+    # this goes here because findCuda reset the flags
+    set(CUDA_NVCC_FLAGS         "${CUDA_NVCC_FLAGS};-Xcompiler;-fPIC;")
+endif()
 
 set(CUDA_NVCC_FLAGS         "${CUDA_NVCC_FLAGS};-gencode;arch=compute_30,code=sm_30")
 set(CUDA_NVCC_FLAGS         "${CUDA_NVCC_FLAGS};-gencode;arch=compute_35,code=sm_35")

@@ -98,7 +98,6 @@ if(CudaBatchedSolver_BUILD_SAMPLES)
     add_subdirectory(src/sample)
 endif()
 
-
 # Include module with fuction 'write_basic_package_version_file'
 include(CMakePackageConfigHelpers)
 
@@ -141,4 +140,17 @@ configure_file(
 add_custom_target(CudaBatchedSolver_uninstall
         COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake)
 
-message(STATUS "Install path: ${CMAKE_INSTALL_PREFIX}")
+
+
+# ==============================================================================
+# Print options
+# ==============================================================================
+message("\n")
+message("** CudaBatchedSolver version: " ${PROJECT_VERSION})
+message("** Building samples: " ${CudaBatchedSolver_BUILD_SAMPLES})
+message("** Building shared library: " ${BUILD_SHARED_LIBS})
+message("** Requested GPU architectures: " ${CudaBatchedSolver_CUDA_ARCH})
+message("** Building for the following architectures: " ${CudaBatchedSolver_ARCH_FLAGS})
+message("** Export package: " ${CudaBatchedSolver_EXPORT_PACKAGE})
+message("** Install path: ${CMAKE_INSTALL_PREFIX}")
+message("\n")

@@ -3,6 +3,10 @@ set(CUDASOLVER_HEADERS solve.h inverse.h)
 
 CUDA_ADD_LIBRARY(CudaBatchedSolver ${CUDASOLVER_SOURCES} ${CUDASOLVER_HEADERS})
 
+target_include_directories(CudaBatchedSolver PUBLIC
+        $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src>
+        $<INSTALL_INTERFACE:include/>)
+
 set_target_properties(CudaBatchedSolver PROPERTIES PUBLIC_HEADER "${CUDASOLVER_HEADERS}")
 
 set_target_properties(CudaBatchedSolver
